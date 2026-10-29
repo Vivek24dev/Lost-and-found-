@@ -9,12 +9,22 @@ import hashlib
 import secrets
 from datetime import datetime
 
-DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lost_and_found.db")
+# Detect serverless / read-only deployment environment (e.g. Vercel)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME') or not os.access(BASE_DIR, os.W_OK):
+    DB_DIR = "/tmp"
+else:
+    DB_DIR = BASE_DIR
+
+DB_FILE = os.path.join(DB_DIR, "lost_and_found.db")
 
 def get_db():
+    needs_init = not os.path.exists(DB_FILE)
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
+    if needs_init:
+        init_db(conn=conn)
     return conn
 
 def hash_password(password: str, salt: str = None) -> tuple:
@@ -27,8 +37,13 @@ def verify_password(password: str, hashed: str, salt: str) -> bool:
     test_hash = hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
     return test_hash == hashed
 
-def init_db():
-    conn = get_db()
+def init_db(conn=None):
+    should_close = False
+    if conn is None:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        should_close = True
     cursor = conn.cursor()
 
     # Users Table
@@ -115,7 +130,8 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         seed_data(conn)
 
-    conn.close()
+    if should_close:
+        conn.close()
 
 def seed_data(conn):
     cursor = conn.cursor()

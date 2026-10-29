@@ -19,8 +19,14 @@ from database import get_db, init_db, hash_password, verify_password
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-UPLOADS_DIR = os.path.join(STATIC_DIR, "uploads")
-os.makedirs(UPLOADS_DIR, exist_ok=True)
+if os.environ.get('VERCEL') or not os.access(BASE_DIR, os.W_OK):
+    UPLOADS_DIR = os.path.join("/tmp", "uploads")
+else:
+    UPLOADS_DIR = os.path.join(STATIC_DIR, "uploads")
+try:
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+except Exception:
+    pass
 
 def parse_auth_token(headers):
     # Check Authorization: Bearer <token>
